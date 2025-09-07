@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Habits Widget</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .widget {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 350px;
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .habit {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      font-size: 15px;
+    }
+
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+      accent-color: #4a67f5;
+    }
+
+    .completed {
+      text-decoration: line-through;
+      color: gray;
+    }
+
+    .info-box {
+      background: #fafafa;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin: 10px 0;
+      text-align: center;
+    }
+
+    /* Progress Ring */
+    .progress-container {
+      width: 140px;
+      height: 140px;
+      margin: 20px auto;
+      position: relative;
+    }
+
+    svg {
+      transform: rotate(-90deg);
+    }
+
+    circle {
+      fill: none;
+      stroke-width: 12;
+      stroke-linecap: round;
+    }
+
+    .bg {
+      stroke: #eee;
+    }
+
+    .progress {
+      stroke: #4a67f5;
+      stroke-dasharray: 377; /* circumference (2πr, r=60) */
+      stroke-dashoffset: 377;
+      transition: stroke-dashoffset 0.8s ease-in-out;
+    }
+
+    .progress-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-weight: bold;
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget">
+    <h2>Daily Habits</h2>
+
+    <label class="habit"><input type="checkbox" data-habit="math"/>Study math</label>
+    <label class="habit"><input type="checkbox" data-habit="exercise"/>Exercise</label>
+    <label class="habit"><input type="checkbox" data-habit="reading"/>Reading, 30 mins</label>
+    <label class="habit"><input type="checkbox" data-habit="french"/>French, 15 min</label>
+    <label class="habit"><input type="checkbox" data-habit="caffeine"/>No caffeine ☕✌🏽</label>
+
+    <div class="info-box">
+      <div id="today-date"></div>
+    </div>
+
+    <div class="info-box">
+      Your best streak is <b id="best-streak">0</b> days
+    </div>
+
+    <div class="progress-container">
+      <svg width="140" height="140">
+        <circle class="bg" cx="70" cy="70" r="60"></circle>
+        <circle class="progress" cx="70" cy="70" r="60"></circle>
+      </svg>
+      <div class="progress-text" id="progress-text">0/5</div>
+    </div>
+
+    <div style="text-align:center; font-weight:bold;" id="current-streak">0 days streak</div>
+  </div>
+
+  <script>
+    const checkboxes = document.querySelectorAll("input[type=checkbox]");
+    const todayDateEl = document.getElementById("today-date");
+    const currentStreakEl = document.getElementById("current-streak");
+    const bestStreakEl = document.getElementById("best-streak");
+    const progressCircle = document.querySelector(".progress");
+    const progressText = document.getElementById("progress-text");
+
+    const totalHabits = checkboxes.length;
+    const circumference = 2 * Math.PI * 60; // circle circumference
+    progressCircle.style.strokeDasharray = circumference;
+
+    // today's key (YYYY-MM-DD)
+    let todayKey = new Date().toISOString().split("T")[0];
+
+    // streaks
+    let streak = parseInt(localStorage.getItem("streak") || "0");
+    let bestStreak = parseInt(localStorage.getItem("bestStreak") || "0");
+    let lastCompletedDate = localStorage.getItem("lastCompletedDate");
+
+    function updateDate() {
+      todayDateEl.textContent = new Date().toLocaleDateString("en-US", {
+        year: "numeric", month: "long", day: "numeric"
+      });
+    }
+
+    function loadProgress() {
+      const savedProgress = JSON.parse(localStorage.getItem("progress-" + todayKey) || "{}");
+      checkboxes.forEach(cb => {
+        cb.checked = !!savedProgress[cb.dataset.habit];
+        cb.parentElement.classList.toggle("completed", cb.checked);
+      });
+      updateProgress();
+      updateStreak();
+    }
+
+    function saveProgress() {
+      const progress = {};
+      checkboxes.forEach(cb => {
+        progress[cb.dataset.habit] = cb.checked;
+        cb.parentElement.classList.toggle("completed", cb.checked);
+      });
+      localStorage.setItem("progress-" + todayKey, JSON.stringify(progress));
+    }
+
+    function updateProgress() {
+      const completed = Array.from(checkboxes).filter(cb => cb.checked).length;
+      const offset = circumference - (completed / totalHabits) * circumference;
+      progressCircle.style.strokeDashoffset = offset;
+      progressText.textContent = `${completed}/${totalHabits}`;
+    }
+
+    function updateStreak() {
+      const allDone = Array.from(checkboxes).every(cb => cb.checked);
+      if (allDone && lastCompletedDate !== todayKey) {
+        streak++;
+        lastCompletedDate = todayKey;
+        localStorage.setItem("streak", streak);
+        localStorage.setItem("lastCompletedDate", todayKey);
+        if (streak > bestStreak) {
+          bestStreak = streak;
+          localStorage.setItem("bestStreak", bestStreak);
+        }
+      }
+      currentStreakEl.textContent = streak + " days streak";
+      bestStreakEl.textContent = bestStreak;
+    }
+
+    // auto-reset at midnight
+    function scheduleMidnightReset() {
+      const now = new Date();
+      const millisUntilMidnight =
+        new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1) - now;
+      setTimeout(() => {
+        todayKey = new Date().toISOString().split("T")[0];
+        updateDate();
+        checkboxes.forEach(cb => (cb.checked = false));
+        saveProgress();
+        updateProgress();
+        updateStreak();
+        scheduleMidnightReset(); // reschedule
+      }, millisUntilMidnight);
+    }
+
+    // init
+    updateDate();
+    loadProgress();
+    checkboxes.forEach(cb => {
+      cb.addEventListener("change", () => {
+        saveProgress();
+        updateProgress();
+        updateStreak();
+      });
+    });
+    scheduleMidnightReset();
+  </script>
+</body>
+</html>
